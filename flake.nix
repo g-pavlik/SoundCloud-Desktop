@@ -27,6 +27,7 @@
           dbus
           librsvg
           libayatana-appindicator
+          libopus
         ];
 
         nativeBuildInputs = with pkgs; [
@@ -39,13 +40,16 @@
           pnpmConfigHook
           wrapGAppsHook3
           gobject-introspection
+          autoconf
+          automake
+          libtool
         ];
 
       in
       {
         packages.default = pkgs.stdenv.mkDerivation rec {
           pname = "soundcloud-desktop";
-          version = "5.9.0";
+          version = "6.1.1";
 
           src = ./.;
 
@@ -55,7 +59,7 @@
             inherit pname version;
             src = ./desktop;
             fetcherVersion = 3;
-            hash = "sha256-xt3DDTqcgDX+e54HSIej/n4S3PdlDrYiYlVsY5oUtZg=";
+            hash = "sha256-BoByprdKIk++HgyISTMgvqBrpXMfNvxJZtjz7qjw5fw=";
           };
 
           # pnpmConfigHook expects pnpmRoot
