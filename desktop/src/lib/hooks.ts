@@ -191,6 +191,7 @@ export interface HistoryEntry {
   scTrackId: string;
   title: string;
   artistName: string;
+  artistUrn: string | null;
   artworkUrl: string | null;
   duration: number;
   playedAt: string;
@@ -219,6 +220,21 @@ export function useHistory(limit = 50) {
   }, [query.data]);
 
   return { entries, ...query };
+}
+
+/* ── Featured ─────────────────────────────────────────────────── */
+
+export interface FeaturedResponse {
+  type: 'track' | 'playlist' | 'user';
+  data: any;
+}
+
+export function useFeatured() {
+  return useQuery<FeaturedResponse | null>({
+    queryKey: ['featured'],
+    queryFn: () => api<FeaturedResponse | null>('/featured'),
+    staleTime: 5 * 60_000,
+  });
 }
 
 /* ── Local Likes ──────────────────────────────────────────────── */
@@ -1002,7 +1018,7 @@ export function useSearchUsers(q: string) {
 
 /* ── Fallback / Seed Tracks ────────────────────────────────────── */
 
-const FALLBACK_TRACK_IDS = '2028678528,2028677636,2078655668';
+const FALLBACK_TRACK_IDS = '2028682452,2065341288,2028677636,2209249766,2060818444,2064016848';
 
 export function useFallbackTracks() {
   return useQuery({
@@ -1038,10 +1054,12 @@ function sampleTrackUrns(tracks: Track[], limit: number): string[] {
  * counts frequency of each related track. Used by both Recommended and Discover.
  */
 export function useRelatedPool(likedTracks: Track[]) {
-  const seedUrns = useMemo(() => {
-    if (likedTracks.length === 0) return [];
-    return sampleTrackUrns(likedTracks, 30);
-  }, [likedTracks]);
+  // Stable seed — compute once when liked tracks first arrive, don't recompute on likes
+  const seedRef = useRef<string[]>([]);
+  if (seedRef.current.length === 0 && likedTracks.length > 0) {
+    seedRef.current = sampleTrackUrns(likedTracks, 30);
+  }
+  const seedUrns = seedRef.current;
 
   const likedUrns = useMemo(() => new Set(likedTracks.map((t) => t.urn)), [likedTracks]);
 

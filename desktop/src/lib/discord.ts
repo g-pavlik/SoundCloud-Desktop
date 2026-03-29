@@ -42,9 +42,7 @@ async function updatePresence(track: Track) {
         title: track.title,
         artist: track.user.username,
         artwork_url: artworkToLarge(track.artwork_url),
-        track_url: track.permalink_url
-          ? `${track.permalink_url}`.replace(/\?.*$/, '')
-          : undefined,
+        track_url: track.permalink_url ? `${track.permalink_url}`.replace(/\?.*$/, '') : undefined,
         duration_secs: Math.round(track.duration / 1000),
         elapsed_secs: Math.round(getCurrentTime()),
         is_playing: isPlaying,
@@ -102,6 +100,10 @@ usePlayerStore.subscribe((state) => {
   }
 
   if (trackChanged || playChanged) {
+    if (seekSyncTimer) {
+      clearTimeout(seekSyncTimer);
+      seekSyncTimer = null;
+    }
     lastUrn = currentTrack.urn;
     lastPlaying = isPlaying;
     lastElapsed = Math.round(getCurrentTime());
@@ -151,6 +153,7 @@ subscribeAudioTime(() => {
 
   // Re-sync Discord timestamps on manual seek / large jumps without spamming updates every second.
   if (drift >= 2) {
+    lastElapsed = elapsed;
     schedulePresenceSync(currentTrack, 180);
   } else {
     lastElapsed = elapsed;
