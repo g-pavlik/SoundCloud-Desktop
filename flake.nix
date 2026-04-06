@@ -49,7 +49,7 @@
       {
         packages.default = pkgs.stdenv.mkDerivation rec {
           pname = "soundcloud-desktop";
-          version = "6.3.0";
+          version = "6.5.1";
 
           src = ./.;
 
@@ -59,7 +59,7 @@
             inherit pname version;
             src = ./desktop;
             fetcherVersion = 3;
-            hash = "sha256-BoByprdKIk++HgyISTMgvqBrpXMfNvxJZtjz7qjw5fw=";
+            hash = "sha256-H6WuxJAr+osSCaL44OQOsZYzfDj1XfB5TWB1GCwkvMY=";
           };
 
           # pnpmConfigHook expects pnpmRoot
