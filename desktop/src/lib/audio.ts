@@ -1,9 +1,16 @@
 import { listen } from '@tauri-apps/api/event';
+import { toast } from 'sonner';
+import i18n from '../i18n';
 import type { Track } from '../stores/player';
 import { usePlayerStore } from '../stores/player';
 import { useSettingsStore } from '../stores/settings';
 import { api, getSessionId, streamUrl } from './api';
-import { enforceAudioCacheLimit } from './cache';
+import {
+  enforceAudioCacheLimit,
+  ensureTrackCached,
+  getCacheInfo,
+  type TrackCacheInfo,
+} from './cache';
 import { trackedInvoke as invoke } from './diagnostics';
 import { art } from './formatters';
 
@@ -77,6 +84,56 @@ export async function reloadCurrentTrack() {
   if (!wasPlaying) invoke('audio_pause').catch(console.error);
 }
 
+function getLoadErrorText(error: unknown): string | null {
+  let message: string | null = null;
+
+  if (typeof error === 'string') {
+    message = error;
+  } else if (error instanceof Error) {
+    message = error.message;
+  } else if (typeof error === 'object' && error) {
+    if ('message' in error && typeof error.message === 'string') {
+      message = error.message;
+    } else if ('error' in error && typeof error.error === 'string') {
+      message = error.error;
+    }
+  }
+
+  if (!message) {
+    const fallback = String(error).trim();
+    if (fallback && fallback !== '[object Object]') {
+      message = fallback;
+    }
+  }
+
+  if (!message) return null;
+
+  const normalized = message
+    .trim()
+    .replace(/^Error invoking remote method '[^']+':\s*/i, '')
+    .replace(/^Command [^:]+ failed:\s*/i, '');
+
+  const unquoted =
+    normalized.startsWith('"') && normalized.endsWith('"')
+      ? normalized.slice(1, -1).trim()
+      : normalized;
+
+  const sanitized = unquoted
+    .replace(/\bhttps?:\/\/[^\s"')\]]+/gi, '')
+    .replace(/\bscproxy:\/\/[^\s"')\]]+/gi, '')
+    .replace(/\b(Bearer)\s+[A-Za-z0-9._~-]+/gi, '$1 [redacted]')
+    .replace(
+      /\b(oauth_token|token|sig|signature|client_id|x-session-id)=([^&\s]+)/gi,
+      '$1=[redacted]',
+    )
+    .replace(/\s+\bfrom\b\s*(?=$|[):;,.])/gi, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([):;,.])/g, '$1')
+    .trim();
+
+  return sanitized || null;
+}
+
 async function loadTrack(track: Track) {
   const gen = ++loadGen;
   stopTrack();
@@ -88,6 +145,8 @@ async function loadTrack(track: Track) {
   fallbackDuration = track.duration / 1000;
   cachedDuration = fallbackDuration;
   cachedTime = 0;
+  usePlayerStore.setState({ downloadProgress: null, downloadSource: null });
+  usePlayerStore.getState().setPlaybackTransport(null, null);
   notify();
 
   // Sync EQ state to Rust
@@ -99,30 +158,56 @@ async function loadTrack(track: Track) {
   invoke('audio_set_volume', { volume: usePlayerStore.getState().volume }).catch(console.error);
 
   try {
-    // Download full track via Rust (handles redirects, retries, caching)
-    const cachedPath = await invoke<string>('track_ensure_cached', {
-      urn,
-      url: streamUrl(urn),
-      sessionId: getSessionId(),
-    });
+    const highQualityStreaming = useSettingsStore.getState().highQualityStreaming;
+
+    // Strategy 1: Cache hit — instant
+    const cached = await getCacheInfo(urn);
+    if (cached?.path) {
+      if (gen !== loadGen) return;
+      usePlayerStore.getState().setPlaybackTransport(cached.quality, cached.source);
+      console.log('[Audio] Playing from cache:', urn);
+      await invoke('audio_load_file', { path: cached.path, cacheKey: urn });
+      if (gen !== loadGen) return;
+      afterLoad(track, gen);
+      return;
+    }
+
+    // Strategy 2: Download full track to cache — Rust picks storage/API internally
+    usePlayerStore.setState({ downloadProgress: 0, downloadSource: 'api' });
+
+    let cachedInfo: TrackCacheInfo;
+    try {
+      cachedInfo = await ensureTrackCached(urn, highQualityStreaming);
+    } catch (error) {
+      if (!highQualityStreaming) throw error;
+      console.warn('[Audio] HQ load failed, retrying without hq:', error);
+      cachedInfo = await ensureTrackCached(urn, false);
+    }
 
     if (gen !== loadGen) return;
+    usePlayerStore.setState({ downloadProgress: null, downloadSource: null });
+    usePlayerStore.getState().setPlaybackTransport(cachedInfo.quality, cachedInfo.source);
 
-    // Load from cached file
-    await invoke<{ duration_secs: number | null }>('audio_load_file', {
-      path: cachedPath,
-      cacheKey: urn,
-    });
-
+    console.log('[Audio] Playing downloaded track:', urn);
+    await invoke('audio_load_file', { path: cachedInfo.path, cacheKey: urn });
     void enforceAudioCacheLimit().catch(console.error);
+
+    if (gen !== loadGen) return;
+    afterLoad(track, gen);
   } catch (e) {
     console.error('[Audio] Load failed:', e);
+    usePlayerStore.setState({ downloadProgress: null, downloadSource: null });
+    usePlayerStore.getState().setPlaybackTransport(null, null);
     if (gen !== loadGen) return;
+    const errorText = getLoadErrorText(e);
+    toast.error(i18n.t('track.loadError'), {
+      description: errorText ? `${track.title}: ${errorText}` : track.title,
+    });
     usePlayerStore.getState().pause();
-    return;
   }
+}
 
-  // Stale check — another loadTrack started while we were loading
+function afterLoad(track: Track, gen: number) {
   if (gen !== loadGen) {
     invoke('audio_stop').catch(console.error);
     return;
@@ -196,6 +281,13 @@ listen<number>('audio:tick', (event) => {
   notify();
 });
 
+listen<{ urn: string; progress: number; source: string }>('track:download-progress', (event) => {
+  const { urn, progress, source } = event.payload;
+  if (urn === currentUrn) {
+    usePlayerStore.setState({ downloadProgress: progress, downloadSource: source });
+  }
+});
+
 listen('audio:ended', () => {
   hasTrack = false;
   handleTrackEnd();
@@ -212,7 +304,8 @@ listen<string>('audio:default-device-changed', (event) => {
 /* ── Store subscriber ────────────────────────────────────────── */
 
 usePlayerStore.subscribe((state, prev) => {
-  const trackChanged = state.currentTrack?.urn !== currentUrn;
+  const nextUrn = state.currentTrack?.urn ?? null;
+  const trackChanged = nextUrn !== currentUrn;
   const playToggled = state.isPlaying !== prev.isPlaying;
 
   if (trackChanged) {
@@ -224,6 +317,7 @@ usePlayerStore.subscribe((state, prev) => {
       currentUrn = null;
       fallbackDuration = 0;
       cachedDuration = 0;
+      usePlayerStore.getState().setPlaybackTransport(null, null);
       notify();
     }
     return;

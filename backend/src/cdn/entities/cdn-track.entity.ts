@@ -3,25 +3,17 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   PrimaryColumn,
-  Unique,
   UpdateDateColumn,
 } from 'typeorm';
 import { v7 as uuidv7 } from 'uuid';
 
-export enum CdnQuality {
-  SQ = 'sq',
-  HQ = 'hq',
-}
-
-export enum CdnStatus {
-  PENDING = 'pending',
-  OK = 'ok',
-  ERROR = 'error',
-}
+export type CdnTrackQuality = 'hq' | 'sq';
+export type CdnTrackStatus = 'pending' | 'ok' | 'error';
 
 @Entity('cdn_tracks')
-@Unique(['trackUrn', 'quality'])
+@Index(['trackUrn', 'quality'], { unique: true })
 export class CdnTrack {
   @PrimaryColumn('uuid')
   id: string;
@@ -33,20 +25,23 @@ export class CdnTrack {
     }
   }
 
+  @Index()
   @Column()
   trackUrn: string;
 
-  @Column({ type: 'varchar', length: 2 })
-  quality: CdnQuality;
+  @Column()
+  quality: CdnTrackQuality;
 
-  @Column({ nullable: true })
-  cdnPath: string;
+  @Column({ type: 'text', nullable: true })
+  cdnPath: string | null;
 
-  @Column({ type: 'varchar', length: 10, default: CdnStatus.PENDING })
-  status: CdnStatus;
+  @Index()
+  @Column({ default: 'pending' })
+  status: CdnTrackStatus;
 
-  @Column({ type: 'boolean', nullable: true, default: null })
-  hqAvailable: boolean | null;
+  @Index()
+  @Column({ type: 'timestamptz', nullable: true, default: () => 'NOW()' })
+  lastAccessedAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;

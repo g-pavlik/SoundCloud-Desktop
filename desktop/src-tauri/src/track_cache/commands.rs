@@ -1,6 +1,6 @@
 use tauri::State;
 
-use crate::track_cache::state::TrackCacheState;
+use crate::track_cache::state::{TrackCacheEntry, TrackCacheState};
 
 #[derive(serde::Deserialize)]
 pub struct PreloadEntry {
@@ -15,10 +15,8 @@ pub async fn track_ensure_cached(
     url: String,
     session_id: Option<String>,
     state: State<'_, TrackCacheState>,
-) -> Result<String, String> {
-    state
-        .ensure_cached(&urn, &url, session_id.as_deref())
-        .await
+) -> Result<TrackCacheEntry, String> {
+    state.ensure_cached(&urn, &url, session_id.as_deref()).await
 }
 
 #[tauri::command]
@@ -32,6 +30,14 @@ pub fn track_get_cache_path(urn: String, state: State<'_, TrackCacheState>) -> O
 }
 
 #[tauri::command]
+pub fn track_get_cache_info(
+    urn: String,
+    state: State<'_, TrackCacheState>,
+) -> Option<TrackCacheEntry> {
+    state.get_cache_entry(&urn)
+}
+
+#[tauri::command]
 pub async fn track_preload(
     entries: Vec<PreloadEntry>,
     state: State<'_, TrackCacheState>,
@@ -41,50 +47,22 @@ pub async fn track_preload(
         if state.is_cached(&entry.urn) {
             continue;
         }
+
+        let Some(permit) = state.try_acquire_preload_slot() else {
+            continue;
+        };
+
         queued += 1;
-        let client = state.client.clone();
-        let audio_dir = state.audio_dir.clone();
+        let state = state.inner().clone();
         let urn = entry.urn;
         let url = entry.url;
         let session_id = entry.session_id;
 
         tokio::spawn(async move {
+            let _permit = permit;
             println!("[TrackCache] preloading {urn} from {url}");
-            let start = std::time::Instant::now();
-            let mut req = client.get(&url);
-            if let Some(sid) = &session_id {
-                req = req.header("x-session-id", sid.as_str());
-            }
-            match req.send().await {
-                Ok(resp) => {
-                    let final_url = resp.url().clone();
-                    let status = resp.status();
-                    if final_url.as_str() != url {
-                        println!("[TrackCache] preload {urn} redirected → {final_url}");
-                    }
-                    if !status.is_success() {
-                        eprintln!("[TrackCache] preload {urn}: HTTP {status} from {final_url}");
-                        return;
-                    }
-                    match resp.bytes().await {
-                        Ok(bytes) => {
-                            if bytes.len() < 8192 {
-                                eprintln!("[TrackCache] preload {urn}: too small ({} bytes)", bytes.len());
-                                return;
-                            }
-                            let filename = format!("{}.audio", urn.replace(':', "_"));
-                            let path = audio_dir.join(filename);
-                            tokio::fs::write(&path, &bytes).await.ok();
-                            let kb = bytes.len() / 1024;
-                            let ms = start.elapsed().as_millis();
-                            println!("[TrackCache] preloaded {urn} — {kb} KB in {ms}ms");
-                        }
-                        Err(e) => eprintln!("[TrackCache] preload {urn}: body read: {e}"),
-                    }
-                }
-                Err(e) => {
-                    eprintln!("[TrackCache] preload {urn}: {e}");
-                }
+            if let Err(err) = state.ensure_cached(&urn, &url, session_id.as_deref()).await {
+                eprintln!("[TrackCache] preload {urn}: {err}");
             }
         });
     }

@@ -23,7 +23,10 @@
     "clearQueue": "Очистить очередь",
     "addToQueue": "Добавить в очередь",
     "shuffle": "Перемешать",
-    "repeat": "Повтор"
+    "repeat": "Повтор",
+    "qualityHQ": "HQ",
+    "qualitySQ": "SQ",
+    "qualityCDN": "CDN"
   },
   "auth": {
     "signIn": "Войти через SoundCloud",
@@ -64,7 +67,8 @@
     "hidePanel": "Скрыть панель",
     "showPanel": "Показать панель",
     "download": "Скачать",
-    "downloaded": "Скачано"
+    "downloaded": "Скачано",
+    "loadError": "Не удалось загрузить трек"
   },
   "playlist": {
     "playAll": "Воспроизвести",
@@ -263,10 +267,12 @@
     "tokenPlaceholder": "Вставьте токен Yandex Music...",
     "start": "Начать импорт",
     "stop": "Остановить",
+    "hide": "Свернуть",
     "found": "Найдено",
     "notFound": "Не найдено",
     "done": "Импорт завершён!",
-    "savingPlaylist": "Сохраняем плейлист..."
+    "savingPlaylist": "Сохраняем плейлист...",
+    "backgroundHint": "Импорт идет в фоне, окно можно закрыть"
   },
   "update": {
     "available": "Доступно обновление",
@@ -283,6 +289,11 @@
   "news": {
     "dismissOnce": "Закрыть",
     "dismissForever": "Больше не показывать",
+    "discord": {
+      "title": "У нас появился Discord!",
+      "description": "Присоединяйся — обсуждения, предложения, баг-репорты",
+      "body": "Мы запустили официальный Discord-сервер SoundCloud Desktop!\n\nЗаходи, чтобы общаться с другими пользователями, предлагать фичи, сообщать о багах и быть в курсе последних новостей.\n\nhttps://discord.gg/xQcGBP8fGG"
+    },
     "artistPro": {
       "title": "Подписчики Artist PRO",
       "description": "Помоги сделать приложение устойчивее к банам — напиши в Discord",

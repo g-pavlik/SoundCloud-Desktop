@@ -61,7 +61,8 @@
     "hidePanel": "Paneli gizle",
     "showPanel": "Paneli goster",
     "download": "Indir",
-    "downloaded": "Kaydedildi"
+    "downloaded": "Kaydedildi",
+    "loadError": "Parca yuklenemedi"
   },
   "playlist": {
     "playAll": "Hepsini Cal",
@@ -255,10 +256,12 @@
     "tokenPlaceholder": "Yandex Music tokeninizi yapistirin...",
     "start": "Ice aktarmayi baslat",
     "stop": "Durdur",
+    "hide": "Gizle",
     "found": "Bulundu",
     "notFound": "Bulunamadi",
     "done": "Ice aktarma tamamlandi!",
-    "savingPlaylist": "Calma listesi kaydediliyor..."
+    "savingPlaylist": "Calma listesi kaydediliyor...",
+    "backgroundHint": "Ice aktarma arka planda surer, bu pencereyi kapatabilirsiniz"
   },
   "update": {
     "available": "Guncelleme mevcut",
@@ -275,6 +278,11 @@
   "news": {
     "dismissOnce": "Kapat",
     "dismissForever": "Bir daha gosterme",
+    "discord": {
+      "title": "Discord sunucumuz var!",
+      "description": "Toplulugumuza katilin — tartisma, oneriler, hata bildirimi",
+      "body": "SoundCloud Desktop icin resmi Discord sunucumuzu actik!\n\nDiger kullanicilarla sohbet etmek, yeni ozellikler onermek, hata bildirmek ve en son haberleri takip etmek icin katilin.\n\nhttps://discord.gg/xQcGBP8fGG"
+    },
     "artistPro": {
       "title": "Artist PRO aboneleri",
       "description": "Uygulamanin yasaklanmasini zorlastirmak icin Discord'dan ulasin",

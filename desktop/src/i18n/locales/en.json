@@ -23,7 +23,10 @@
     "clearQueue": "Clear Queue",
     "addToQueue": "Add to Queue",
     "shuffle": "Shuffle",
-    "repeat": "Repeat"
+    "repeat": "Repeat",
+    "qualityHQ": "HQ",
+    "qualitySQ": "SQ",
+    "qualityCDN": "CDN"
   },
   "auth": {
     "signIn": "Sign in with SoundCloud",
@@ -64,7 +67,8 @@
     "hidePanel": "Hide panel",
     "showPanel": "Show panel",
     "download": "Download",
-    "downloaded": "Saved"
+    "downloaded": "Saved",
+    "loadError": "Failed to load track"
   },
   "playlist": {
     "playAll": "Play All",
@@ -258,10 +262,12 @@
     "tokenPlaceholder": "Paste your Yandex Music token...",
     "start": "Start import",
     "stop": "Stop",
+    "hide": "Hide",
     "found": "Found",
     "notFound": "Not found",
     "done": "Import complete!",
-    "savingPlaylist": "Saving playlist..."
+    "savingPlaylist": "Saving playlist...",
+    "backgroundHint": "Import continues in the background. You can close this window"
   },
   "update": {
     "available": "Update available",
@@ -278,6 +284,11 @@
   "news": {
     "dismissOnce": "Close",
     "dismissForever": "Don't show again",
+    "discord": {
+      "title": "We have a Discord server!",
+      "description": "Join our community — discuss, suggest features, report bugs",
+      "body": "We've launched an official Discord server for SoundCloud Desktop!\n\nJoin to chat with other users, suggest new features, report bugs, and stay up to date with the latest news.\n\nhttps://discord.gg/xQcGBP8fGG"
+    },
     "artistPro": {
       "title": "Artist PRO subscribers",
       "description": "Help make the app harder to ban — reach out on Discord",

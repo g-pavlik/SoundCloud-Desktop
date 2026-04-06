@@ -31,6 +31,8 @@ export interface Track {
 }
 
 type RepeatMode = 'off' | 'one' | 'all';
+export type PlaybackQuality = 'hq' | 'sq';
+export type PlaybackSource = 'storage' | 'api';
 
 function shuffleArray<T>(arr: T[]): void {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -49,6 +51,12 @@ interface PlayerState {
   volumeBeforeMute: number;
   shuffle: boolean;
   repeat: RepeatMode;
+  /** Download progress 0-1 when loading from API, null when not downloading */
+  downloadProgress: number | null;
+  /** Download source: 'storage' | 'api' | null */
+  downloadSource: string | null;
+  playbackQuality: PlaybackQuality | null;
+  playbackSource: PlaybackSource | null;
 
   play: (track: Track, queue?: Track[]) => void;
   playFromQueue: (index: number) => void;
@@ -68,6 +76,10 @@ interface PlayerState {
   toggleRepeat: () => void;
   setCurrentTrackAccess: (access: Track['access']) => void;
   replaceTrackMetadata: (track: Track) => void;
+  setPlaybackTransport: (
+    quality: PlaybackQuality | null,
+    source: PlaybackSource | null,
+  ) => void;
 }
 
 export const usePlayerStore = create<PlayerState>()(
@@ -82,6 +94,10 @@ export const usePlayerStore = create<PlayerState>()(
       volumeBeforeMute: 50,
       shuffle: false,
       repeat: 'off',
+      downloadProgress: null,
+      downloadSource: null,
+      playbackQuality: null,
+      playbackSource: null,
 
       play: (track, queue) => {
         if (queue) {
@@ -313,6 +329,16 @@ export const usePlayerStore = create<PlayerState>()(
             originalQueue: s.originalQueue?.map(mergeTrack) ?? null,
           };
         }),
+
+      setPlaybackTransport: (quality, source) =>
+        set((state) =>
+          state.playbackQuality === quality && state.playbackSource === source
+            ? state
+            : {
+                playbackQuality: quality,
+                playbackSource: source,
+              },
+        ),
     }),
     {
       name: 'sc-player',
