@@ -1,5 +1,7 @@
 import { Controller, Delete, Get, Param, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiHeader, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { AuthService } from '../auth/auth.service.js';
+import { CacheClear } from '../cache/cache-clear.decorator.js';
 import { Cached } from '../cache/cached.decorator.js';
 import { AccessToken } from '../common/decorators/access-token.decorator.js';
 import { SessionId } from '../common/decorators/session-id.decorator.js';
@@ -12,6 +14,7 @@ import {
   PaginatedUserResponse,
   ScMe,
 } from '../soundcloud/soundcloud.types.js';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
 import { MeService } from './me.service.js';
 
 @ApiTags('me')
@@ -19,7 +22,11 @@ import { MeService } from './me.service.js';
 @UseGuards(AuthGuard)
 @Controller('me')
 export class MeController {
-  constructor(private readonly meService: MeService) {}
+  constructor(
+    private readonly meService: MeService,
+    private readonly subscriptionsService: SubscriptionsService,
+    private readonly authService: AuthService,
+  ) {}
 
   @Get()
   @Cached({ ttl: 30, scope: 'user' })
@@ -27,6 +34,15 @@ export class MeController {
   @ApiOkResponse({ type: ScMe })
   getProfile(@AccessToken() token: string) {
     return this.meService.getProfile(token);
+  }
+
+  @Get('subscription')
+  @ApiOperation({ summary: 'Check if current user has an active subscription' })
+  async getSubscription(@SessionId() sessionId: string) {
+    const session = await this.authService.getSession(sessionId);
+    const userUrn = session?.soundcloudUserId;
+    const premium = userUrn ? await this.subscriptionsService.isPremium(userUrn) : false;
+    return { premium };
   }
 
   @Get('feed')
@@ -54,6 +70,7 @@ export class MeController {
   }
 
   @Get('likes/tracks')
+  @Cached({ ttl: 30, scope: 'user', key: 'me-liked-tracks' })
   @ApiOperation({ summary: 'Get liked tracks' })
   @ApiQuery({
     name: 'access',
@@ -73,6 +90,7 @@ export class MeController {
   }
 
   @Get('likes/playlists')
+  @Cached({ ttl: 30, scope: 'user', key: 'me-liked-playlists' })
   @ApiOperation({ summary: 'Get liked playlists' })
   @ApiOkResponse({ type: PaginatedPlaylistResponse })
   getLikedPlaylists(@AccessToken() token: string, @Query() query: PaginationQuery) {
@@ -80,7 +98,7 @@ export class MeController {
   }
 
   @Get('followings')
-  @Cached({ ttl: 5, scope: 'user' })
+  @Cached({ ttl: 60, scope: 'user', key: 'me-followings' })
   @ApiOperation({ summary: 'Get users followed by authenticated user' })
   @ApiOkResponse({ type: PaginatedUserResponse })
   getFollowings(@AccessToken() token: string, @Query() query: PaginationQuery) {
@@ -100,12 +118,14 @@ export class MeController {
   }
 
   @Put('followings/:userUrn')
+  @CacheClear('me-followings')
   @ApiOperation({ summary: 'Follow a user' })
   followUser(@AccessToken() token: string, @Param('userUrn') userUrn: string) {
     return this.meService.followUser(token, userUrn);
   }
 
   @Delete('followings/:userUrn')
+  @CacheClear('me-followings')
   @ApiOperation({ summary: 'Unfollow a user' })
   unfollowUser(@AccessToken() token: string, @Param('userUrn') userUrn: string) {
     return this.meService.unfollowUser(token, userUrn);
@@ -120,6 +140,7 @@ export class MeController {
   }
 
   @Get('playlists')
+  @Cached({ ttl: 60, scope: 'user', key: 'me-playlists' })
   @ApiOperation({ summary: 'Get user playlists' })
   @ApiQuery({ name: 'show_tracks', required: false, type: Boolean })
   @ApiOkResponse({ type: PaginatedPlaylistResponse })

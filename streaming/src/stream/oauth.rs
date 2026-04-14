@@ -22,27 +22,48 @@ pub struct OAuthStreamResult {
 }
 
 /// Try OAuth API stream: /tracks/{urn}/streams → pick best format → download.
+/// `hq_only=true`  → only hls_aac_160 (HQ AAC 160k HLS)
+/// `hq_only=false` → all formats: hls_aac_160 → http_mp3_128 → hls_mp3_128
 pub async fn try_oauth_stream(
     client: &Client,
     proxy_url: &str,
+    proxy_fallback: bool,
     access_token: &str,
     track_urn: &str,
     secret_token: Option<&str>,
+    hq_only: bool,
 ) -> Option<OAuthStreamResult> {
-    let streams = get_streams(client, proxy_url, access_token, track_urn, secret_token).await?;
+    let streams = get_streams(
+        client,
+        proxy_url,
+        proxy_fallback,
+        access_token,
+        track_urn,
+        secret_token,
+    )
+    .await?;
 
-    // Format priority: HLS AAC 160 → HTTP MP3 128 → HLS MP3 128
-    let candidates: Vec<(&str, &str, &str)> = [
-        (
+    // hq_only: only HLS AAC 160; otherwise: all formats by priority
+    let candidates: Vec<(&str, &str, &str)> = if hq_only {
+        vec![(
             streams.hls_aac_160_url.as_deref(),
             "hls",
             "audio/mp4; codecs=\"mp4a.40.2\"",
-        ),
-        (streams.http_mp3_128_url.as_deref(), "http", "audio/mpeg"),
-        (streams.hls_mp3_128_url.as_deref(), "hls", "audio/mpeg"),
-    ]
+        )]
+    } else {
+        vec![
+            (
+                streams.hls_aac_160_url.as_deref(),
+                "hls",
+                "audio/mp4; codecs=\"mp4a.40.2\"",
+            ),
+            (streams.http_mp3_128_url.as_deref(), "http", "audio/mpeg"),
+            (streams.hls_mp3_128_url.as_deref(), "hls", "audio/mpeg"),
+        ]
+    }
     .into_iter()
     .filter_map(|(url, proto, mime)| url.map(|u| (u, proto, mime)))
+    .filter(|(url, _, _)| !url.contains("preview"))
     .collect();
 
     if candidates.is_empty() {
@@ -50,7 +71,17 @@ pub async fn try_oauth_stream(
     }
 
     for (url, proto, mime) in candidates {
-        match try_format(client, proxy_url, access_token, url, proto, mime).await {
+        match try_format(
+            client,
+            proxy_url,
+            proxy_fallback,
+            access_token,
+            url,
+            proto,
+            mime,
+        )
+        .await
+        {
             Ok(result) => return Some(result),
             Err(e) => {
                 warn!("[oauth] format {proto} failed: {e}");
@@ -64,6 +95,7 @@ pub async fn try_oauth_stream(
 async fn get_streams(
     client: &Client,
     proxy_url: &str,
+    proxy_fallback: bool,
     access_token: &str,
     track_urn: &str,
     secret_token: Option<&str>,
@@ -77,6 +109,16 @@ async fn get_streams(
     headers.insert("Authorization".into(), format!("OAuth {access_token}"));
     headers.insert("Accept".into(), "application/json; charset=utf-8".into());
 
+    // If proxy_fallback: try direct first, then via proxy on error
+    if proxy_fallback && !proxy_url.is_empty() {
+        match proxy_get_json::<ScStreams>(client, "", &target, headers.clone()).await {
+            Ok(s) => return Some(s),
+            Err(e) => {
+                warn!("[oauth] direct get streams failed, falling back to proxy: {e}");
+            }
+        }
+    }
+
     match proxy_get_json::<ScStreams>(client, proxy_url, &target, headers).await {
         Ok(s) => Some(s),
         Err(e) => {
@@ -89,13 +131,38 @@ async fn get_streams(
 async fn try_format(
     client: &Client,
     proxy_url: &str,
+    proxy_fallback: bool,
+    access_token: &str,
+    url: &str,
+    proto: &str,
+    mime: &str,
+) -> Result<OAuthStreamResult, Box<dyn std::error::Error + Send + Sync>> {
+    // If proxy_fallback: try direct first, then via proxy
+    if proxy_fallback && !proxy_url.is_empty() {
+        match try_format_inner(client, "", access_token, url, proto, mime).await {
+            Ok(result) => return Ok(result),
+            Err(e) => {
+                warn!("[oauth] direct format {proto} failed, falling back to proxy: {e}");
+            }
+        }
+    }
+
+    try_format_inner(client, proxy_url, access_token, url, proto, mime).await
+}
+
+async fn try_format_inner(
+    client: &Client,
+    proxy_url: &str,
     access_token: &str,
     url: &str,
     proto: &str,
     mime: &str,
 ) -> Result<OAuthStreamResult, Box<dyn std::error::Error + Send + Sync>> {
     if proto == "hls" {
-        let (data, content_type) = download_hls_full(client, proxy_url, url, mime).await?;
+        let mut m3u8_headers = HashMap::new();
+        m3u8_headers.insert("Authorization".into(), format!("OAuth {access_token}"));
+        let (data, content_type) =
+            download_hls_full(client, proxy_url, url, mime, m3u8_headers).await?;
         Ok(OAuthStreamResult { data, content_type })
     } else {
         // HTTP direct download

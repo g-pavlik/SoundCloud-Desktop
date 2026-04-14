@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
 use axum::http::Method;
-use axum::routing::{delete, get, post};
+use axum::routing::get;
 use axum::Router;
 use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 
-mod admin;
 mod cleanup;
 mod config;
 mod db;
@@ -15,7 +14,6 @@ mod stream;
 
 use config::Config;
 use db::postgres::PgPool;
-use db::sqlite::SqliteDb;
 use stream::anon::AnonClient;
 use stream::cdn::CdnClient;
 use stream::cookies::CookiesClient;
@@ -24,7 +22,6 @@ use stream::cookies::CookiesClient;
 pub struct AppState {
     pub config: Arc<Config>,
     pub pg: PgPool,
-    pub sqlite: Arc<SqliteDb>,
     pub http_client: reqwest::Client,
     pub anon: Arc<AnonClient>,
     pub cookies: Option<Arc<CookiesClient>>,
@@ -46,11 +43,6 @@ async fn main() {
     let pg = PgPool::connect(&config)
         .await
         .expect("Failed to connect to PostgreSQL");
-
-    // SQLite
-    let sqlite = Arc::new(
-        SqliteDb::open(&config.sqlite_path).expect("Failed to open SQLite"),
-    );
 
     // HTTP client
     let http_client = reqwest::Client::builder()
@@ -94,16 +86,11 @@ async fn main() {
     let config = Arc::new(config);
 
     // Spawn cleanup task
-    cleanup::task::spawn_cleanup_task(
-        (*config).clone(),
-        pg.clone(),
-        cdn.clone(),
-    );
+    cleanup::task::spawn_cleanup_task((*config).clone(), pg.clone(), cdn.clone());
 
     let state = AppState {
         config: config.clone(),
         pg,
-        sqlite,
         http_client,
         anon,
         cookies,
@@ -116,27 +103,25 @@ async fn main() {
         .allow_headers(Any)
         .max_age(std::time::Duration::from_secs(3600));
 
-    let app = Router::new()
-        // Stream endpoints
-        .route("/stream/{track_urn}", get(stream::handler::stream_normal))
+    let mut app = Router::new();
+
+    if !config.premium_only {
+        app = app.route("/stream/{track_urn}", get(stream::handler::stream_normal));
+    }
+
+    let app = app
+        .route("/resolve", get(stream::handler::resolve_track))
         .route(
             "/stream/{track_urn}/premium",
             get(stream::handler::stream_premium),
         )
-        // Admin endpoints
-        .route("/admin/subscriptions", get(admin::handler::list_subscriptions))
-        .route(
-            "/admin/subscriptions",
-            post(admin::handler::upsert_subscription),
-        )
-        .route(
-            "/admin/subscriptions/{user_urn}",
-            delete(admin::handler::delete_subscription),
-        )
-        // Health
         .route("/health", get(|| async { "ok" }))
         .layer(cors)
         .with_state(state);
+
+    if config.premium_only {
+        info!("Premium-only mode: standard endpoint disabled");
+    }
 
     let addr = format!("0.0.0.0:{}", config.port);
     info!("Streaming service starting on {addr}");

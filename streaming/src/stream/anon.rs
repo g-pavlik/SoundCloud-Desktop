@@ -81,13 +81,42 @@ impl AnonClient {
         let client_id = self.get_client_id().await?;
         let target = format!("{SC_API_V2}/tracks/{track_id}?client_id={client_id}");
 
-        match proxy_get_json::<ResolvedTrack>(&self.client, &self.proxy_url, &target, HashMap::new())
-            .await
+        match proxy_get_json::<ResolvedTrack>(
+            &self.client,
+            &self.proxy_url,
+            &target,
+            HashMap::new(),
+        )
+        .await
         {
             Ok(t) => Ok(t),
             Err(_) => {
                 let new_id = self.invalidate_and_refresh().await?;
                 let retry_target = format!("{SC_API_V2}/tracks/{track_id}?client_id={new_id}");
+                proxy_get_json(&self.client, &self.proxy_url, &retry_target, HashMap::new()).await
+            }
+        }
+    }
+
+    pub async fn resolve_url(
+        &self,
+        url: &str,
+    ) -> Result<serde_json::Value, Box<dyn std::error::Error + Send + Sync>> {
+        let client_id = self.get_client_id().await?;
+        let target = build_resolve_target(url, &client_id);
+
+        match proxy_get_json::<serde_json::Value>(
+            &self.client,
+            &self.proxy_url,
+            &target,
+            HashMap::new(),
+        )
+        .await
+        {
+            Ok(track) => Ok(track),
+            Err(_) => {
+                let new_id = self.invalidate_and_refresh().await?;
+                let retry_target = build_resolve_target(url, &new_id);
                 proxy_get_json(&self.client, &self.proxy_url, &retry_target, HashMap::new()).await
             }
         }
@@ -121,13 +150,9 @@ impl AnonClient {
             Err(_) if explicit_client_id.is_none() => {
                 let new_id = self.invalidate_and_refresh().await?;
                 let retry_target = format!("{transcoding_url}{sep}client_id={new_id}");
-                let r: TranscodingResolveResponse = proxy_get_json(
-                    &self.client,
-                    &self.proxy_url,
-                    &retry_target,
-                    HashMap::new(),
-                )
-                .await?;
+                let r: TranscodingResolveResponse =
+                    proxy_get_json(&self.client, &self.proxy_url, &retry_target, HashMap::new())
+                        .await?;
                 Ok(r.url)
             }
             Err(e) => Err(e),
@@ -149,48 +174,127 @@ impl AnonClient {
             }
         };
 
-        let transcodings = track
-            .media
-            .as_ref()
-            .and_then(|m| m.transcodings.as_ref());
+        let transcodings = track.media.as_ref().and_then(|m| m.transcodings.as_ref());
 
+        // If no transcodings — refresh client_id and retry track fetch
         let transcodings = match transcodings {
             Some(t) if !t.is_empty() => t,
             _ => {
-                warn!("[anon] no transcodings for {track_id}");
-                return Ok(None);
+                warn!("[anon] no transcodings for {track_id}, refreshing client_id");
+                self.invalidate_and_refresh().await?;
+                let retry_track = match self.get_track_by_id(track_id).await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        warn!("[anon] retry get track failed: {e}");
+                        return Ok(None);
+                    }
+                };
+                match retry_track
+                    .media
+                    .as_ref()
+                    .and_then(|m| m.transcodings.as_ref())
+                {
+                    Some(t) if !t.is_empty() => {
+                        // Return immediately from the retry path
+                        return self.stream_from_transcodings(t).await;
+                    }
+                    _ => {
+                        warn!("[anon] still no transcodings for {track_id} after refresh");
+                        return Ok(None);
+                    }
+                }
             }
         };
 
-        let transcoding = match pick_transcoding(transcodings) {
-            Some(t) => t,
-            None => return Ok(None),
-        };
-
-        let mime = transcoding
-            .format
-            .as_ref()
-            .and_then(|f| f.mime_type.as_deref())
-            .unwrap_or("audio/mpeg");
-
-        let m3u8_url = self.resolve_transcoding_url(&transcoding.url, None).await?;
-        let (data, content_type) =
-            download_hls_full(&self.client, &self.proxy_url, &m3u8_url, mime).await?;
-
-        Ok(Some(AnonStreamResult { data, content_type }))
+        match self.stream_from_transcodings(transcodings).await {
+            Ok(Some(r)) => Ok(Some(r)),
+            Ok(None) => Ok(None),
+            Err(e) => {
+                // Stream failed — refresh client_id and retry
+                warn!("[anon] stream failed for {track_id}, refreshing client_id: {e}");
+                self.invalidate_and_refresh().await?;
+                let retry_track = match self.get_track_by_id(track_id).await {
+                    Ok(t) => t,
+                    Err(e2) => {
+                        warn!("[anon] retry get track failed: {e2}");
+                        return Ok(None);
+                    }
+                };
+                match retry_track
+                    .media
+                    .as_ref()
+                    .and_then(|m| m.transcodings.as_ref())
+                {
+                    Some(t) if !t.is_empty() => self.stream_from_transcodings(t).await,
+                    _ => Ok(None),
+                }
+            }
+        }
     }
 
-    async fn refresh_client_id(
+    async fn stream_from_transcodings(
         &self,
-    ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        transcodings: &[Transcoding],
+    ) -> Result<Option<AnonStreamResult>, Box<dyn std::error::Error + Send + Sync>> {
+        let ranked = ranked_transcodings(transcodings);
+        if ranked.is_empty() {
+            return Ok(None);
+        }
+
+        let mut last_err: Option<Box<dyn std::error::Error + Send + Sync>> = None;
+        for t in ranked {
+            let mime = t
+                .format
+                .as_ref()
+                .and_then(|f| f.mime_type.as_deref())
+                .unwrap_or("audio/mpeg");
+
+            let m3u8_url = match self.resolve_transcoding_url(&t.url, None).await {
+                Ok(u) => u,
+                Err(e) => {
+                    warn!(
+                        "[anon] resolve {} failed: {e}",
+                        t.preset.as_deref().unwrap_or("?")
+                    );
+                    last_err = Some(e);
+                    continue;
+                }
+            };
+
+            match download_hls_full(
+                &self.client,
+                &self.proxy_url,
+                &m3u8_url,
+                mime,
+                HashMap::new(),
+            )
+            .await
+            {
+                Ok((data, content_type)) => {
+                    return Ok(Some(AnonStreamResult { data, content_type }))
+                }
+                Err(e) => {
+                    warn!(
+                        "[anon] transcoding {} failed: {e}",
+                        t.preset.as_deref().unwrap_or("?")
+                    );
+                    last_err = Some(e);
+                }
+            }
+        }
+
+        // All failed — return Err to trigger client_id refresh retry
+        Err(last_err.unwrap_or_else(|| "all anon transcodings failed".into()))
+    }
+
+    async fn refresh_client_id(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         let mut headers = HashMap::new();
         headers.insert(
             "User-Agent".into(),
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36".into(),
         );
 
-        let (html, _) =
-            proxy_get_text(&self.client, &self.proxy_url, SC_BASE_URL, headers).await?;
+        let (html, _) = proxy_get_text(&self.client, &self.proxy_url, SC_BASE_URL, headers).await?;
 
         let client_id = extract_client_id_from_hydration(&html)
             .ok_or("Failed to extract SoundCloud client_id from page")?;
@@ -212,8 +316,8 @@ impl AnonClient {
     }
 }
 
-/// Pick best transcoding: non-encrypted, non-snipped, non-preview
-fn pick_transcoding(transcodings: &[Transcoding]) -> Option<&Transcoding> {
+/// Return all valid transcodings ranked by preset preference.
+fn ranked_transcodings(transcodings: &[Transcoding]) -> Vec<&Transcoding> {
     let candidates: Vec<&Transcoding> = transcodings
         .iter()
         .filter(|t| {
@@ -223,83 +327,46 @@ fn pick_transcoding(transcodings: &[Transcoding]) -> Option<&Transcoding> {
                 .and_then(|f| f.protocol.as_deref())
                 .unwrap_or("")
                 .contains("encrypted");
-            let snipped = t.snipped.unwrap_or(false);
-            let preview = t.url.contains("/preview");
-            !encrypted && !snipped && !preview
+            !encrypted && !t.snipped.unwrap_or(false) && !t.url.contains("/preview")
         })
         .collect();
 
     if candidates.is_empty() {
-        return None;
+        return Vec::new();
     }
 
     const PRESET_ORDER: &[&str] = &["mp3_1_0", "aac_160k", "opus_0_0", "abr_sq"];
 
+    let mut ordered: Vec<&Transcoding> = Vec::with_capacity(candidates.len());
     for preset in PRESET_ORDER {
         if let Some(t) = candidates
             .iter()
             .find(|t| t.preset.as_deref() == Some(preset))
         {
-            return Some(t);
+            ordered.push(t);
         }
     }
-
-    Some(candidates[0])
+    // Append any not matched by preset (by pointer identity)
+    for t in &candidates {
+        if !ordered.iter().any(|o| std::ptr::eq(*o, *t)) {
+            ordered.push(t);
+        }
+    }
+    ordered
 }
 
 /// Extract client_id from window.__sc_hydration on SC homepage
 fn extract_client_id_from_hydration(html: &str) -> Option<String> {
-    let marker = "window.__sc_hydration =";
-    let idx = html.find(marker)?;
-    let rest = &html[idx + marker.len()..];
+    let pattern = r#""hydratable"\s*:\s*"apiClient"\s*,\s*"data"\s*:\s*\{\s*"id"\s*:\s*"([^"]+)""#;
+    let re = regex::Regex::new(pattern).ok()?;
+    let caps = re.captures(html)?;
+    caps.get(1).map(|m| m.as_str().to_string())
+}
 
-    // Find start of array
-    let arr_start = rest.find('[')?;
-    let json_start = &rest[arr_start..];
-
-    // Find matching end bracket
-    let mut depth: i32 = 0;
-    let mut in_str = false;
-    let mut esc = false;
-    let mut end_idx = 0;
-
-    for (i, ch) in json_start.chars().enumerate() {
-        if !in_str {
-            match ch {
-                '"' if !esc => in_str = true,
-                '[' => depth += 1,
-                ']' => {
-                    depth -= 1;
-                    if depth == 0 {
-                        end_idx = i + 1;
-                        break;
-                    }
-                }
-                _ => {}
-            }
-        } else if ch == '"' && !esc {
-            in_str = false;
-        }
-        esc = !esc && ch == '\\';
-    }
-
-    if end_idx == 0 {
-        return None;
-    }
-
-    let json_str = &json_start[..end_idx];
-    let entries: Vec<serde_json::Value> = serde_json::from_str(json_str).ok()?;
-
-    // Find apiClient entry (search from end)
-    for entry in entries.iter().rev() {
-        if entry.get("hydratable").and_then(|h| h.as_str()) == Some("apiClient") {
-            return entry
-                .get("data")
-                .and_then(|d| d.get("id"))
-                .and_then(|id| id.as_str())
-                .map(|s| s.to_string());
-        }
-    }
-
-    None
+fn build_resolve_target(url: &str, client_id: &str) -> String {
+    let query = url::form_urlencoded::Serializer::new(String::new())
+        .append_pair("url", url)
+        .append_pair("client_id", client_id)
+        .finish();
+    format!("{SC_API_V2}/resolve?{query}")
 }

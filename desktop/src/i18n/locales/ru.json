@@ -149,10 +149,8 @@
     "startLikingDesc": "Чем больше лайков, тем точнее рекомендации и насыщеннее главная страница"
   },
   "offline": {
-    "blockedBadge": "Локальный режим",
     "offlineBadge": "Нет сети",
     "readyBadge": "Локальная медиатека",
-    "blockedTitle": "Локальная медиатека",
     "offlineTitle": "Оффлайн",
     "readyTitle": "Локальная медиатека",
     "tryOnline": "Попробовать онлайн",
@@ -225,6 +223,8 @@
     "normalizeVolumeDesc": "Выравнивает тихие и громкие треки до более ровного уровня",
     "highQualityStreaming": "Высокое качество стрима",
     "highQualityStreamingDesc": "Стараться воспроизводить треки в максимально доступном качестве",
+    "bypassWhitelist": "Обход белых списков",
+    "bypassWhitelistDesc": "Альтернативная маршрутизация при блокировках и отключениях интернета",
     "import": "Импорт",
     "importYandex": "Импорт из Yandex Music"
   },
@@ -286,6 +286,26 @@
     "retry": "Повторить",
     "seeAll": "Показать все",
     "cancel": "Отмена"
+  },
+  "star": {
+    "title": "Подписка Star",
+    "active": "Активна",
+    "getIt": "Узнать больше",
+    "modalTitle": "Star",
+    "modalSub": "Поддержи проект — получи бонусы",
+    "perkGoPlus": "Доступ к GO+ трекам",
+    "perkServer": "Выделенный сервер стриминга",
+    "perkHQ": "Больше HQ треков",
+    "bypassWhitelist": "Обход белых списков и лучшая доступность",
+    "perkSupport": "Ну и просто поддержать проект монеткой.\nКоличество бонусов будет увеличиваться!",
+    "howTo": "Как получить",
+    "step1": "Перейдите на Boosty",
+    "step2": "Привяжите Discord к своему Boosty",
+    "step3": "Зайдите на наш Discord-сервер",
+    "step4": "Купите подписку на Boosty",
+    "step5": "В нашем Discord-сервере привяжите SoundCloud командой /sc-link",
+    "goBoosty": "Boosty",
+    "goDiscord": "Discord"
   },
   "news": {
     "dismissOnce": "Закрыть",

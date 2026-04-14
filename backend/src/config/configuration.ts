@@ -5,6 +5,7 @@ export default () => ({
     clientSecret: process.env.SOUNDCLOUD_CLIENT_SECRET || '',
     redirectUri: process.env.SOUNDCLOUD_REDIRECT_URI || 'http://localhost:3000/auth/callback',
     proxyUrl: process.env.SC_PROXY_URL || '',
+    proxyFallback: process.env.SC_PROXY_FALLBACK === 'true',
   },
   database: {
     host: process.env.DATABASE_HOST || 'localhost',
@@ -15,6 +16,9 @@ export default () => ({
   },
   streaming: {
     serviceUrl: process.env.STREAMING_SERVICE_URL || 'http://localhost:8080',
+  },
+  subscriptions: {
+    snapshotDir: process.env.SUBSCRIPTIONS_SNAPSHOT_DIR || '/snapshots',
   },
   telegram: {
     botToken: process.env.TELEGRAM_BOT_TOKEN || '',
