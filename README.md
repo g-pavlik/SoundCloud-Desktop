@@ -8,18 +8,18 @@ For the original project, features, and documentation, see the [upstream reposit
 
 Run directly:
 ```bash
-nix run github:g-pavlik/SoundCloud-Desktop?ref=nix-flake-v6.6.0
+nix run github:g-pavlik/SoundCloud-Desktop?ref=nix-flake-v6.7.2
 ```
 
 Install to profile:
 ```bash
-nix profile install github:g-pavlik/SoundCloud-Desktop?ref=nix-flake-v6.6.0
+nix profile install github:g-pavlik/SoundCloud-Desktop?ref=nix-flake-v6.7.2
 ```
 
 As a flake input:
 ```nix
 {
-  inputs.soundcloud-desktop.url = "github:g-pavlik/SoundCloud-Desktop?ref=nix-flake-v6.6.0";
+  inputs.soundcloud-desktop.url = "github:g-pavlik/SoundCloud-Desktop?ref=nix-flake-v6.7.2";
 }
 ```
 
@@ -27,6 +27,7 @@ As a flake input:
 
 | Tag | Upstream |
 |-----|----------|
+| `nix-flake-v6.7.2` | [6.7.2](https://github.com/zxcloli666/SoundCloud-Desktop/releases/tag/6.7.2) |
 | `nix-flake-v6.6.0` | [6.6.0](https://github.com/zxcloli666/SoundCloud-Desktop/releases/tag/6.6.0) |
 | `nix-flake-v6.5.1` | [6.5.1](https://github.com/zxcloli666/SoundCloud-Desktop/releases/tag/6.5.1) |
 | `nix-flake-v6.3.0` | [6.3.0](https://github.com/zxcloli666/SoundCloud-Desktop/releases/tag/6.3.0) |
