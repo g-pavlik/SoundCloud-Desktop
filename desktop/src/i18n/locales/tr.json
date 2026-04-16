@@ -32,6 +32,15 @@
     "copyLink": "Baglantiyi kopyala",
     "copied": "Kopyalandi!"
   },
+  "reauth": {
+    "title": "Oturum Suresi Doldu",
+    "description": "Oturumunuz sona erdi. Devam etmek icin giris yapin.",
+    "signIn": "Giris Yap",
+    "signingIn": "Giris yapiliyor...",
+    "copyLink": "Baglantiyi kopyala",
+    "copied": "Kopyalandi!",
+    "logout": "Cikis Yap"
+  },
   "search": {
     "placeholder": "Parca, calma listesi, kullanici ara...",
     "tracks": "Parcalar",
@@ -275,6 +284,15 @@
     "retry": "Tekrar dene",
     "seeAll": "Tumunu Gor",
     "cancel": "Iptal"
+  },
+  "cache": {
+    "bulkCache": "Onbellege al",
+    "cancel": "Iptal",
+    "allCached": "Tum parcalar zaten onbellekte",
+    "bulkSuccess_one": "{{count}} parca onbellege alindi",
+    "bulkSuccess_other": "{{count}} parca onbellege alindi",
+    "bulkFailed_one": "{{count}} parca onbellege alinamadi",
+    "bulkFailed_other": "{{count}} parca onbellege alinamadi"
   },
   "star": {
     "title": "Star Abonelik",

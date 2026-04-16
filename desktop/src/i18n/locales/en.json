@@ -35,6 +35,15 @@
     "copyLink": "Copy link",
     "copied": "Copied!"
   },
+  "reauth": {
+    "title": "Session Expired",
+    "description": "Your session has expired. Sign in to continue.",
+    "signIn": "Sign In",
+    "signingIn": "Signing in...",
+    "copyLink": "Copy link",
+    "copied": "Copied!",
+    "logout": "Log out"
+  },
   "search": {
     "placeholder": "Search tracks, playlists, users...",
     "tracks": "Tracks",
@@ -281,6 +290,15 @@
     "retry": "Retry",
     "seeAll": "See All",
     "cancel": "Cancel"
+  },
+  "cache": {
+    "bulkCache": "Cache all",
+    "cancel": "Cancel",
+    "allCached": "All tracks are already cached",
+    "bulkSuccess_one": "Cached {{count}} track",
+    "bulkSuccess_other": "Cached {{count}} tracks",
+    "bulkFailed_one": "Failed to cache {{count}} track",
+    "bulkFailed_other": "Failed to cache {{count}} tracks"
   },
   "star": {
     "title": "Star Subscription",

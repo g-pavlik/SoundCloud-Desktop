@@ -35,6 +35,15 @@
     "copyLink": "Скопировать ссылку",
     "copied": "Скопировано!"
   },
+  "reauth": {
+    "title": "Сессия истекла",
+    "description": "Ваша сессия истекла. Войдите, чтобы продолжить.",
+    "signIn": "Войти",
+    "signingIn": "Входим...",
+    "copyLink": "Скопировать ссылку",
+    "copied": "Скопировано!",
+    "logout": "Выйти"
+  },
   "search": {
     "placeholder": "Треки, плейлисты, пользователи...",
     "tracks": "Треки",
@@ -286,6 +295,17 @@
     "retry": "Повторить",
     "seeAll": "Показать все",
     "cancel": "Отмена"
+  },
+  "cache": {
+    "bulkCache": "Закэшировать",
+    "cancel": "Отменить",
+    "allCached": "Все треки уже в кэше",
+    "bulkSuccess_one": "Закэширован {{count}} трек",
+    "bulkSuccess_few": "Закэшировано {{count}} трека",
+    "bulkSuccess_many": "Закэшировано {{count}} треков",
+    "bulkFailed_one": "Не удалось закэшировать {{count}} трек",
+    "bulkFailed_few": "Не удалось закэшировать {{count}} трека",
+    "bulkFailed_many": "Не удалось закэшировать {{count}} треков"
   },
   "star": {
     "title": "Подписка Star",
