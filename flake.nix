@@ -49,7 +49,7 @@
       {
         packages.default = pkgs.stdenv.mkDerivation rec {
           pname = "soundcloud-desktop";
-          version = "6.7.2";
+          version = "6.8.0";
 
           src = ./.;
 
